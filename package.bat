@@ -30,25 +30,32 @@ copy /y "%SRC%\shaders\*" "%DIST%\shaders\"
 echo 127.0.0.1 > "%DIST%\server.txt"
 
 (
-echo VoxelEngine - Standalone Release
-echo =================================
+echo ================================================
+echo           VoxelEngine - Standalone
+echo ================================================
 echo.
-echo How to Play:
+echo HOW TO PLAY:
 echo 1. Double-click VoxelEngine.exe to launch!
 echo.
-echo Controls:
-echo - WASD: Move / Walk
-echo - Space: Jump [Survival] or Fly Up [Creative]
+echo CONTROLS:
+echo - WASD: Move / Walk around
+echo - Mouse: Look around [captured automatically]
+echo - Left Click: Break targeted block
+echo - Right Click: Place selected block
+echo - 1 to 5 or Scroll Wheel: Switch block material
+echo - Space: Jump [Survival] / Fly Up [Creative]
 echo - Left Ctrl: Sprint
-echo - Left Click: Break Block
-echo - Right Click: Place Block [1-5 to select block]
-echo - F: Toggle between Survival Walking and Creative Flight
+echo - F: Toggle between Survival Walking and Creative Flying
 echo - Escape: Open Pause / Settings Menu
-echo - Q: Quit
+echo - Q: Quit the game
 echo.
-echo Multiplayer:
-echo - To join the host, ensure the host IP is set in server.txt, then click 'CONNECT TO SERVER' in the Escape menu [or press J].
-echo - To host your own server, press H or click 'HOST SERVER' in the Escape menu.
+echo MULTIPLAYER SETUP:
+echo 1. Firewall: Host must allow VoxelEngine on Private AND Public networks in Windows Firewall.
+echo 2. Hamachi: Both join the same Hamachi room. Put the Host's 25.x.x.x IP into server.txt.
+echo 3. Host: Host launches game, presses Escape and clicks [ HOST SERVER ] [or press key H].
+echo 4. Client: Friend launches game, presses Escape and clicks [ CONNECT ] [or press key J].
+echo.
+echo If a connection fails, check in-game error banner and network_log.txt for details!
 ) > "%DIST%\HOW_TO_PLAY.txt"
 
 powershell -Command "Compress-Archive -Path '%DIST%\*' -DestinationPath '%SRC%\VoxelEngine-Windows-x64.zip' -Force"
