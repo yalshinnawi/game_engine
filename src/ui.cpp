@@ -19,7 +19,7 @@ void UIRenderer::init(const std::string& shaderDir) {
     glBindBuffer(GL_ARRAY_BUFFER, m_vbo);
 
     // Dynamic buffer
-    glBufferData(GL_ARRAY_BUFFER, 1024 * sizeof(UIVertex), nullptr, GL_DYNAMIC_DRAW);
+    glBufferData(GL_ARRAY_BUFFER, 2048 * sizeof(UIVertex), nullptr, GL_DYNAMIC_DRAW);
 
     // aPos (location 0)
     glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(UIVertex), (void*)offsetof(UIVertex, pos));
@@ -109,37 +109,35 @@ void UIRenderer::drawCrosshair(int screenWidth, int screenHeight) {
 }
 
 void UIRenderer::drawPauseMenu(int screenWidth, int screenHeight, bool isFlying,
+                               NetworkMode netMode, int clientCount,
                                double mouseX, double mouseY, int& outHovered) {
     // Dim background
     drawRect(0.0f, 0.0f, static_cast<float>(screenWidth), static_cast<float>(screenHeight),
-             glm::vec4(0.05f, 0.07f, 0.12f, 0.70f));
+             glm::vec4(0.04f, 0.06f, 0.10f, 0.72f));
 
-    float cardW = 380.0f;
-    float cardH = 280.0f;
+    float cardW = 420.0f;
+    float cardH = 380.0f;
     float cardX = (screenWidth - cardW) * 0.5f;
     float cardY = (screenHeight - cardH) * 0.5f;
 
     // Card background
-    drawRect(cardX, cardY, cardW, cardH, glm::vec4(0.12f, 0.14f, 0.18f, 0.95f));
-    drawRectOutline(cardX, cardY, cardW, cardH, 2.0f, glm::vec4(0.35f, 0.42f, 0.55f, 1.0f));
+    drawRect(cardX, cardY, cardW, cardH, glm::vec4(0.11f, 0.13f, 0.17f, 0.96f));
+    drawRectOutline(cardX, cardY, cardW, cardH, 2.0f, glm::vec4(0.32f, 0.40f, 0.52f, 1.0f));
 
     // Header bar
-    drawRect(cardX, cardY, cardW, 48.0f, glm::vec4(0.18f, 0.22f, 0.30f, 1.0f));
-    drawRectOutline(cardX, cardY, cardW, 48.0f, 1.0f, glm::vec4(0.35f, 0.42f, 0.55f, 0.8f));
-
-    // Header accent line
-    drawRect(cardX, cardY + 46.0f, cardW, 2.0f, glm::vec4(0.3f, 0.7f, 1.0f, 1.0f));
+    drawRect(cardX, cardY, cardW, 46.0f, glm::vec4(0.16f, 0.20f, 0.28f, 1.0f));
+    drawRect(cardX, cardY + 44.0f, cardW, 2.0f, glm::vec4(0.25f, 0.65f, 0.95f, 1.0f));
 
     // Button geometry
-    float btnW = 320.0f;
-    float btnH = 46.0f;
+    float btnW = 360.0f;
+    float btnH = 44.0f;
     float btnX = (screenWidth - btnW) * 0.5f;
-    float startY = cardY + 70.0f;
-    float spacing = 62.0f;
+    float startY = cardY + 60.0f;
+    float spacing = 54.0f;
 
     outHovered = -1;
 
-    for (int i = 0; i < 3; i++) {
+    for (int i = 0; i < 5; i++) {
         float by = startY + i * spacing;
         bool hovered = (mouseX >= btnX && mouseX <= btnX + btnW &&
                         mouseY >= by   && mouseY <= by + btnH);
@@ -152,42 +150,51 @@ void UIRenderer::drawPauseMenu(int screenWidth, int screenHeight, bool isFlying,
 
         if (i == 0) {
             // Resume Game
-            btnBg = hovered ? glm::vec4(0.22f, 0.36f, 0.28f, 1.0f) : glm::vec4(0.16f, 0.22f, 0.20f, 1.0f);
-            btnBorder = hovered ? glm::vec4(0.45f, 0.85f, 0.55f, 1.0f) : glm::vec4(0.30f, 0.55f, 0.38f, 0.8f);
+            btnBg = hovered ? glm::vec4(0.20f, 0.35f, 0.25f, 1.0f) : glm::vec4(0.14f, 0.20f, 0.18f, 1.0f);
+            btnBorder = hovered ? glm::vec4(0.40f, 0.85f, 0.50f, 1.0f) : glm::vec4(0.28f, 0.50f, 0.35f, 0.8f);
             accentColor = glm::vec4(0.35f, 0.85f, 0.45f, 1.0f);
         } else if (i == 1) {
-            // Toggle Mode
-            btnBg = hovered ? glm::vec4(0.20f, 0.30f, 0.44f, 1.0f) : glm::vec4(0.15f, 0.20f, 0.30f, 1.0f);
-            btnBorder = hovered ? glm::vec4(0.40f, 0.70f, 0.95f, 1.0f) : glm::vec4(0.25f, 0.45f, 0.65f, 0.8f);
-            accentColor = isFlying ? glm::vec4(0.95f, 0.75f, 0.25f, 1.0f) : glm::vec4(0.30f, 0.75f, 0.95f, 1.0f);
+            // Toggle Game Mode
+            btnBg = hovered ? glm::vec4(0.18f, 0.28f, 0.40f, 1.0f) : glm::vec4(0.14f, 0.18f, 0.26f, 1.0f);
+            btnBorder = hovered ? glm::vec4(0.35f, 0.65f, 0.90f, 1.0f) : glm::vec4(0.22f, 0.40f, 0.60f, 0.8f);
+            accentColor = isFlying ? glm::vec4(0.95f, 0.75f, 0.25f, 1.0f) : glm::vec4(0.25f, 0.75f, 0.95f, 1.0f);
+        } else if (i == 2) {
+            // Host Server
+            bool isHost = (netMode == NetworkMode::SERVER);
+            btnBg = hovered ? glm::vec4(0.35f, 0.25f, 0.40f, 1.0f) : glm::vec4(0.20f, 0.15f, 0.25f, 1.0f);
+            btnBorder = isHost ? glm::vec4(0.70f, 0.40f, 0.95f, 1.0f) : (hovered ? glm::vec4(0.65f, 0.45f, 0.85f, 1.0f) : glm::vec4(0.40f, 0.30f, 0.55f, 0.8f));
+            accentColor = isHost ? glm::vec4(0.40f, 0.95f, 0.40f, 1.0f) : glm::vec4(0.80f, 0.45f, 0.95f, 1.0f);
+        } else if (i == 3) {
+            // Connect to Client
+            bool isClient = (netMode == NetworkMode::CLIENT);
+            btnBg = hovered ? glm::vec4(0.25f, 0.35f, 0.35f, 1.0f) : glm::vec4(0.15f, 0.22f, 0.22f, 1.0f);
+            btnBorder = isClient ? glm::vec4(0.35f, 0.90f, 0.85f, 1.0f) : (hovered ? glm::vec4(0.45f, 0.80f, 0.75f, 1.0f) : glm::vec4(0.30f, 0.50f, 0.48f, 0.8f));
+            accentColor = isClient ? glm::vec4(0.35f, 0.95f, 0.85f, 1.0f) : glm::vec4(0.40f, 0.75f, 0.70f, 1.0f);
         } else {
             // Quit
-            btnBg = hovered ? glm::vec4(0.40f, 0.20f, 0.22f, 1.0f) : glm::vec4(0.25f, 0.16f, 0.18f, 1.0f);
-            btnBorder = hovered ? glm::vec4(0.95f, 0.45f, 0.50f, 1.0f) : glm::vec4(0.60f, 0.30f, 0.35f, 0.8f);
+            btnBg = hovered ? glm::vec4(0.38f, 0.18f, 0.20f, 1.0f) : glm::vec4(0.22f, 0.14f, 0.16f, 1.0f);
+            btnBorder = hovered ? glm::vec4(0.95f, 0.40f, 0.45f, 1.0f) : glm::vec4(0.55f, 0.28f, 0.32f, 0.8f);
             accentColor = glm::vec4(0.95f, 0.35f, 0.40f, 1.0f);
         }
 
-        // Draw button box
         drawRect(btnX, by, btnW, btnH, btnBg);
         drawRectOutline(btnX, by, btnW, btnH, hovered ? 2.5f : 1.5f, btnBorder);
-
-        // Accent indicator bar on left of button
         drawRect(btnX + 4.0f, by + 6.0f, 6.0f, btnH - 12.0f, accentColor);
     }
 }
 
 int UIRenderer::getClickedMenuButton(int screenWidth, int screenHeight, double mouseX, double mouseY) const {
-    float cardW = 380.0f;
-    float cardH = 280.0f;
+    float cardW = 420.0f;
+    float cardH = 380.0f;
     float cardY = (screenHeight - cardH) * 0.5f;
 
-    float btnW = 320.0f;
-    float btnH = 46.0f;
+    float btnW = 360.0f;
+    float btnH = 44.0f;
     float btnX = (screenWidth - btnW) * 0.5f;
-    float startY = cardY + 70.0f;
-    float spacing = 62.0f;
+    float startY = cardY + 60.0f;
+    float spacing = 54.0f;
 
-    for (int i = 0; i < 3; i++) {
+    for (int i = 0; i < 5; i++) {
         float by = startY + i * spacing;
         if (mouseX >= btnX && mouseX <= btnX + btnW &&
             mouseY >= by   && mouseY <= by + btnH) {

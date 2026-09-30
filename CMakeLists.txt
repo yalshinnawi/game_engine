@@ -55,6 +55,8 @@ set(ENGINE_SOURCES
     src/input.cpp
     src/player.cpp
     src/ui.cpp
+    src/network.cpp
+    src/avatar.cpp
 )
 
 add_executable(${PROJECT_NAME} ${ENGINE_SOURCES})
@@ -71,6 +73,11 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     glfw
     glm::glm
 )
+
+# ── Sockets for Multiplayer (Winsock on Windows) ──
+if(WIN32)
+    target_link_libraries(${PROJECT_NAME} PRIVATE ws2_32)
+endif()
 
 # ── Link platform OpenGL ──
 if(APPLE)

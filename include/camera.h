@@ -20,6 +20,8 @@ public:
     void setPosition(const glm::vec3& pos) { m_position = pos; }
     glm::vec3 getFront() const { return m_front; }
     float getFov() const { return m_fov; }
+    float getYaw() const { return m_yaw; }
+    float getPitch() const { return m_pitch; }
 
     // Movement directions
     enum Direction { FORWARD, BACKWARD, LEFT, RIGHT, UP, DOWN };

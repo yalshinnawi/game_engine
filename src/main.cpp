@@ -3,16 +3,16 @@
  * Built with C++20 and OpenGL 4.3 Core
  * 
  * Features:
+ *   - Multiplayer Networking: Host server or join client in real-time
+ *   - Synchronized Player Avatars (rendered 3D Minecraft character models)
+ *   - Synchronized Block Breaking & Placing across the network
  *   - Survival Walking Mode with Gravity, Jump & Block Collisions
  *   - Flight / Creative Mode toggle (F key or Pause Menu)
- *   - Left Click: Break Block
- *   - Right Click: Place Block (1-5 to select block type)
- *   - Escape: In-game Pause Menu with interactive buttons
- *   - Window Resizing: Fully dynamic and crash-proof
+ *   - Left Click: Break Block | Right Click: Place Block (1-5 to select block)
+ *   - Escape: Pause Menu with interactive buttons (Host / Join / Mode / Quit)
+ *   - Window Resizing: Crash-proof and dynamic
  *   - Crosshair: Center screen aiming
- *   - F1: Wireframe toggle
- *   - F5 / R: Hot-reload shaders
- *   - Q: Quit
+ *   - F1: Wireframe toggle | F5/R: Hot-reload shaders | Q: Quit
  */
 
 #include "window.h"
@@ -23,13 +23,15 @@
 #include "input.h"
 #include "player.h"
 #include "ui.h"
+#include "network.h"
+#include "avatar.h"
 
 #include <iostream>
 #include <sstream>
 
 int main() {
     try {
-        // ── Window (1280x720 default, fully resizable) ──
+        // ── Window (1280x720, resizable) ──
         voxel::Window window(1280, 720, "VoxelEngine");
 
         // ── Camera ──
@@ -48,6 +50,11 @@ int main() {
         // ── UI Renderer (Crosshair & Pause Menu) ──
         voxel::UIRenderer uiRenderer;
         uiRenderer.init("shaders");
+
+        // ── Multiplayer System ──
+        voxel::NetworkManager network;
+        voxel::AvatarRenderer avatarRenderer;
+        avatarRenderer.init("shaders");
 
         // Initial world pre-generation around spawn
         world.update(glm::vec3(0.0f, 50.0f, 0.0f));
@@ -68,11 +75,13 @@ int main() {
         int frameCount = 0;
         float fpsTimer = 0.0f;
         float currentFPS = 0.0f;
+        float netBroadcastTimer = 0.0f;
 
         std::cout << "\n=== VoxelEngine Running ===" << std::endl;
-        std::cout << "SURVIVAL MODE (Default):" << std::endl;
+        std::cout << "CONTROLS:" << std::endl;
         std::cout << "  WASD: Walk | Space: Jump | Ctrl: Sprint | F: Toggle Flight" << std::endl;
         std::cout << "  Left Click: Break Block | Right Click: Place Block (1-5 to switch block)" << std::endl;
+        std::cout << "  H: Host Server (Port 25565) | J: Join Server (127.0.0.1)" << std::endl;
         std::cout << "  Escape: Open Pause Menu | F1: Wireframe | Q: Quit\n" << std::endl;
 
         // ── Main Loop ──
@@ -82,19 +91,46 @@ int main() {
             lastFrame = currentFrame;
             if (deltaTime > 0.1f) deltaTime = 0.1f; // Clamp delta time
 
-            // Poll events
+            // Poll GLFW events
             window.pollEvents();
 
-            // FPS Counter in window title
+            // ── Multiplayer Network Polling ──
+            std::vector<voxel::RemotePlayer> remotePlayers;
+            std::vector<voxel::BlockEvent> incomingBlocks;
+            if (network.isConnected()) {
+                network.poll(remotePlayers, incomingBlocks);
+
+                // Apply incoming block changes from other players
+                for (const auto& ev : incomingBlocks) {
+                    world.setBlock(ev.x, ev.y, ev.z, ev.type);
+                }
+
+                // Broadcast local player transform ~30 times per second
+                netBroadcastTimer += deltaTime;
+                if (netBroadcastTimer >= 0.033f) {
+                    netBroadcastTimer = 0.0f;
+                    network.broadcastTransform(player.getPosition(), camera.getYaw(), camera.getPitch());
+                }
+            }
+
+            // ── FPS & Status Title Bar ──
             frameCount++;
             fpsTimer += deltaTime;
             if (fpsTimer >= 1.0f) {
                 currentFPS = static_cast<float>(frameCount) / fpsTimer;
                 std::ostringstream title;
-                title << "VoxelEngine | " << (player.isFlying() ? "CREATIVE (FLY)" : "SURVIVAL (WALK)")
-                      << " | FPS: " << static_cast<int>(currentFPS)
-                      << " | Chunks: " << world.getChunkCount()
-                      << " | Pos: ("
+                title << "VoxelEngine | " << (player.isFlying() ? "CREATIVE" : "SURVIVAL")
+                      << " | FPS: " << static_cast<int>(currentFPS);
+
+                if (network.getMode() == voxel::NetworkMode::SERVER) {
+                    title << " | [HOST: " << (network.getClientCount() + 1) << " Players]";
+                } else if (network.getMode() == voxel::NetworkMode::CLIENT) {
+                    title << " | [CLIENT: Connected #" << network.getLocalId() << "]";
+                } else {
+                    title << " | [OFFLINE]";
+                }
+
+                title << " | Pos: ("
                       << static_cast<int>(player.getPosition().x) << ", "
                       << static_cast<int>(player.getPosition().y) << ", "
                       << static_cast<int>(player.getPosition().z) << ")";
@@ -109,13 +145,24 @@ int main() {
                 input.setCursorCaptured(!isPaused);
             }
 
-            // Quick quit
-            if (input.wasKeyJustPressed(GLFW_KEY_Q) && isPaused) {
-                break;
-            }
-
-            // ── In-Game Logic ──
+            // ── In-Game Logic (When not paused) ──
             if (!isPaused) {
+                // Hotkey H: Host server
+                if (input.wasKeyJustPressed(GLFW_KEY_H)) {
+                    if (!network.isConnected()) {
+                        network.startServer(25565);
+                        std::cout << "[Engine] Hosting server on port 25565..." << std::endl;
+                    }
+                }
+
+                // Hotkey J: Join localhost server
+                if (input.wasKeyJustPressed(GLFW_KEY_J)) {
+                    if (!network.isConnected()) {
+                        network.connectClient("127.0.0.1", 25565);
+                        std::cout << "[Engine] Joining server at 127.0.0.1:25565..." << std::endl;
+                    }
+                }
+
                 // Toggle flight mode with F
                 if (input.wasKeyJustPressed(GLFW_KEY_F)) {
                     player.toggleFlying();
@@ -126,6 +173,7 @@ int main() {
                 if (input.wasKeyJustPressed(GLFW_KEY_R) || input.wasKeyJustPressed(GLFW_KEY_F5)) {
                     renderer.getChunkShader().reload();
                     uiRenderer.init("shaders");
+                    avatarRenderer.init("shaders");
                     std::cout << "[Engine] Shaders reloaded!" << std::endl;
                 }
 
@@ -159,6 +207,9 @@ int main() {
                 // Left click: Break Block
                 if (hasTarget && input.wasMouseButtonJustPressed(GLFW_MOUSE_BUTTON_LEFT)) {
                     world.setBlock(hitBlock.x, hitBlock.y, hitBlock.z, voxel::BlockType::AIR);
+                    if (network.isConnected()) {
+                        network.broadcastBlockChange(hitBlock.x, hitBlock.y, hitBlock.z, voxel::BlockType::AIR);
+                    }
                     std::cout << "[Voxel] Broke block at (" << hitBlock.x << ", " << hitBlock.y << ", " << hitBlock.z << ")" << std::endl;
                 }
 
@@ -177,6 +228,9 @@ int main() {
 
                     if (!insidePlayer) {
                         world.setBlock(placePos.x, placePos.y, placePos.z, player.getSelectedBlock());
+                        if (network.isConnected()) {
+                            network.broadcastBlockChange(placePos.x, placePos.y, placePos.z, player.getSelectedBlock());
+                        }
                         std::cout << "[Voxel] Placed block at (" << placePos.x << ", " << placePos.y << ", " << placePos.z << ")" << std::endl;
                     }
                 }
@@ -188,35 +242,54 @@ int main() {
                                                                  input.getMouseX(), input.getMouseY());
                 }
 
-                // Keyboard options in pause menu
                 if (input.wasKeyJustPressed(GLFW_KEY_ENTER) || clickedBtn == 0) {
-                    // Resume Game
+                    // Button 0: Resume
                     isPaused = false;
                     input.setCursorCaptured(true);
                 } else if (input.wasKeyJustPressed(GLFW_KEY_M) || clickedBtn == 1) {
-                    // Toggle Game Mode
+                    // Button 1: Toggle Mode
                     player.toggleFlying();
                 } else if (clickedBtn == 2) {
-                    // Quit to Desktop
+                    // Button 2: Host Server
+                    if (network.getMode() != voxel::NetworkMode::SERVER) {
+                        network.startServer(25565);
+                    }
+                } else if (clickedBtn == 3) {
+                    // Button 3: Connect to Local Server
+                    if (!network.isConnected()) {
+                        network.connectClient("127.0.0.1", 25565);
+                    }
+                } else if (input.wasKeyJustPressed(GLFW_KEY_Q) || clickedBtn == 4) {
+                    // Button 4: Quit
                     break;
                 }
             }
 
-            // ── Render 3D World ──
+            // ── Render 3D World & Avatars ──
             if (window.getWidth() > 0 && window.getHeight() > 0) {
                 renderer.beginFrame(camera, window.getAspectRatio());
+
+                // 1. Render voxel terrain
                 renderer.renderWorld(world);
+
+                // 2. Render other connected players' 3D avatars
+                if (!remotePlayers.empty()) {
+                    avatarRenderer.render(camera, window.getAspectRatio(), remotePlayers,
+                                          renderer.getSkyColor(), renderer.getFogDistance());
+                }
+
                 renderer.endFrame();
 
                 // ── Render 2D UI ──
                 uiRenderer.begin(window.getWidth(), window.getHeight());
                 if (!isPaused) {
-                    // Crosshair in center of screen
+                    // Aim crosshair
                     uiRenderer.drawCrosshair(window.getWidth(), window.getHeight());
                 } else {
-                    // Pause Menu
+                    // In-game Pause & Multiplayer Menu
                     int hovered = -1;
                     uiRenderer.drawPauseMenu(window.getWidth(), window.getHeight(), player.isFlying(),
+                                            network.getMode(), network.getClientCount(),
                                             input.getMouseX(), input.getMouseY(), hovered);
                 }
                 uiRenderer.end();
@@ -229,6 +302,7 @@ int main() {
         }
 
         std::cout << "\n[Engine] Shutting down cleanly..." << std::endl;
+        network.disconnect();
 
     } catch (const std::exception& e) {
         std::cerr << "[Fatal Error] " << e.what() << std::endl;

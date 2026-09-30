@@ -25,6 +25,7 @@ public:
 
     // Fog
     void setFogDistance(float distance) { m_fogDistance = distance; }
+    float getFogDistance() const { return m_fogDistance; }
 
     Shader& getChunkShader() { return m_chunkShader; }
 

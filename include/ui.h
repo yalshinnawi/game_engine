@@ -4,6 +4,7 @@
 #include <vector>
 #include <string>
 #include "shader.h"
+#include "network.h"
 
 namespace voxel {
 
@@ -28,6 +29,7 @@ public:
 
     // Pause menu rendering and hit testing
     void drawPauseMenu(int screenWidth, int screenHeight, bool isFlying,
+                       NetworkMode netMode, int clientCount,
                        double mouseX, double mouseY, int& outHovered);
 
     int getClickedMenuButton(int screenWidth, int screenHeight, double mouseX, double mouseY) const;
