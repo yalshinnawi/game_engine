@@ -1,0 +1,32 @@
+# Build output
+build/
+out/
+cmake-build-*/
+
+# IDE
+.vs/
+*.user
+*.suo
+*.sln
+*.vcxproj*
+
+# Compiled objects
+*.o
+*.obj
+*.exe
+*.dll
+*.so
+*.dylib
+*.a
+*.lib
+*.pdb
+*.ilk
+*.exp
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Dependencies (fetched by CMake)
+_deps/
