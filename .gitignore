@@ -30,3 +30,9 @@ desktop.ini
 
 # Dependencies (fetched by CMake)
 _deps/
+ 
+build_release/
+dist/
+*.zip
+server.txt
+

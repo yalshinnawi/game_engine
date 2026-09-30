@@ -4,10 +4,11 @@ project(VoxelEngine CXX C)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 
 include(FetchContent)
 
-# ── GLFW (windowing & input) ──
+# â”€â”€ GLFW (windowing & input) â”€â”€
 FetchContent_Declare(
     glfw
     GIT_REPOSITORY https://github.com/glfw/glfw.git
@@ -18,7 +19,7 @@ set(GLFW_BUILD_TESTS    OFF CACHE BOOL "" FORCE)
 set(GLFW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(glfw)
 
-# ── GLM (math library) ──
+# â”€â”€ GLM (math library) â”€â”€
 FetchContent_Declare(
     glm
     GIT_REPOSITORY https://github.com/g-truc/glm.git
@@ -26,7 +27,7 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(glm)
 
-# ── stb_image (texture loading) ──
+# â”€â”€ stb_image (texture loading) â”€â”€
 FetchContent_Declare(
     stb
     GIT_REPOSITORY https://github.com/nothings/stb.git
@@ -34,7 +35,7 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(stb)
 
-# ── FastNoise Lite (terrain generation) ──
+# â”€â”€ FastNoise Lite (terrain generation) â”€â”€
 FetchContent_Declare(
     fastnoise
     GIT_REPOSITORY https://github.com/Auburn/FastNoiseLite.git
@@ -42,7 +43,7 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(fastnoise)
 
-# ── Source files ──
+# â”€â”€ Source files â”€â”€
 set(ENGINE_SOURCES
     src/main.cpp
     src/glad.c
@@ -74,12 +75,12 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     glm::glm
 )
 
-# ── Sockets for Multiplayer (Winsock on Windows) ──
+# â”€â”€ Sockets for Multiplayer (Winsock on Windows) â”€â”€
 if(WIN32)
     target_link_libraries(${PROJECT_NAME} PRIVATE ws2_32)
 endif()
 
-# ── Link platform OpenGL ──
+# â”€â”€ Link platform OpenGL â”€â”€
 if(APPLE)
     target_link_libraries(${PROJECT_NAME} PRIVATE "-framework OpenGL")
 else()
@@ -87,7 +88,7 @@ else()
     target_link_libraries(${PROJECT_NAME} PRIVATE OpenGL::GL)
 endif()
 
-# ── Copy shaders to build directory ──
+# â”€â”€ Copy shaders to build directory â”€â”€
 add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory
     ${CMAKE_SOURCE_DIR}/shaders $<TARGET_FILE_DIR:${PROJECT_NAME}>/shaders

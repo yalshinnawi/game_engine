@@ -200,6 +200,17 @@ int main(int argc, char* argv[]) {
                 // Hotkey J: Join target server
                 if (input.wasKeyJustPressed(GLFW_KEY_J)) {
                     if (!network.isConnected()) {
+                        std::ifstream reloadCfg("server.txt");
+                        if (reloadCfg.is_open()) {
+                            std::string line;
+                            if (std::getline(reloadCfg, line)) {
+                                size_t first = line.find_first_not_of(" \t\r\n");
+                                size_t last = line.find_last_not_of(" \t\r\n");
+                                if (first != std::string::npos && last != std::string::npos) {
+                                    targetIP = line.substr(first, (last - first + 1));
+                                }
+                            }
+                        }
                         network.connectClient(targetIP, targetPort);
                         std::cout << "[Engine] Joining server at " << targetIP << ":" << targetPort << "..." << std::endl;
                     }
@@ -299,6 +310,18 @@ int main(int argc, char* argv[]) {
                 } else if (clickedBtn == 3) {
                     // Button 3: Connect to Server (targetIP)
                     if (!network.isConnected()) {
+                        // Re-check server.txt in case user updated it live
+                        std::ifstream reloadCfg("server.txt");
+                        if (reloadCfg.is_open()) {
+                            std::string line;
+                            if (std::getline(reloadCfg, line)) {
+                                size_t first = line.find_first_not_of(" \t\r\n");
+                                size_t last = line.find_last_not_of(" \t\r\n");
+                                if (first != std::string::npos && last != std::string::npos) {
+                                    targetIP = line.substr(first, (last - first + 1));
+                                }
+                            }
+                        }
                         network.connectClient(targetIP, targetPort);
                     }
                 } else if (input.wasKeyJustPressed(GLFW_KEY_Q) || clickedBtn == 4) {
@@ -331,7 +354,7 @@ int main(int argc, char* argv[]) {
                     // In-game Pause & Multiplayer Menu
                     int hovered = -1;
                     uiRenderer.drawPauseMenu(window.getWidth(), window.getHeight(), player.isFlying(),
-                                            network.getMode(), network.getClientCount(),
+                                            network.getMode(), network.getClientCount(), targetIP,
                                             input.getMouseX(), input.getMouseY(), hovered);
                 }
                 uiRenderer.end();

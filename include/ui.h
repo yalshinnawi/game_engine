@@ -34,7 +34,7 @@ public:
 
     // Pause menu rendering and hit testing
     void drawPauseMenu(int screenWidth, int screenHeight, bool isFlying,
-                       NetworkMode netMode, int clientCount,
+                       NetworkMode netMode, int clientCount, const std::string& targetIP,
                        double mouseX, double mouseY, int& outHovered);
 
     int getClickedMenuButton(int screenWidth, int screenHeight, double mouseX, double mouseY) const;
