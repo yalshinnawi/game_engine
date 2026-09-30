@@ -153,13 +153,14 @@ void UIRenderer::drawTextCentered(const std::string& text, float centerX, float 
 void UIRenderer::drawPauseMenu(int screenWidth, int screenHeight, bool isFlying,
                                NetworkMode netMode, ConnectionState connState, int clientCount,
                                uint32_t localId, const std::string& targetIP,
+                               const std::string& errorSummary, const std::string& errorDiagnosis,
                                double mouseX, double mouseY, int& outHovered) {
     // Dim background
     drawRect(0.0f, 0.0f, static_cast<float>(screenWidth), static_cast<float>(screenHeight),
              glm::vec4(0.04f, 0.06f, 0.10f, 0.72f));
 
     float cardW = 420.0f;
-    float cardH = 380.0f;
+    float cardH = 415.0f;
     float cardX = (screenWidth - cardW) * 0.5f;
     float cardY = (screenHeight - cardH) * 0.5f;
 
@@ -174,6 +175,21 @@ void UIRenderer::drawPauseMenu(int screenWidth, int screenHeight, bool isFlying,
     // Header Title Text
     drawTextCentered("GAME PAUSED", cardX + cardW * 0.5f, cardY + 23.0f, 2.0f,
                      glm::vec4(0.95f, 0.95f, 1.0f, 1.0f));
+
+    // Error Diagnosis Banner if connection failed
+    if (connState == ConnectionState::FAILED && !errorSummary.empty()) {
+        drawRect(cardX + 16.0f, cardY + cardH - 72.0f, cardW - 32.0f, 62.0f,
+                 glm::vec4(0.25f, 0.08f, 0.10f, 0.95f));
+        drawRectOutline(cardX + 16.0f, cardY + cardH - 72.0f, cardW - 32.0f, 62.0f, 1.5f,
+                        glm::vec4(0.95f, 0.35f, 0.35f, 1.0f));
+        
+        drawTextCentered("FAIL: " + errorSummary.substr(0, 42), cardX + cardW * 0.5f,
+                         cardY + cardH - 60.0f, 1.0f, glm::vec4(1.0f, 0.45f, 0.45f, 1.0f));
+        drawTextCentered(errorDiagnosis.substr(0, 48), cardX + cardW * 0.5f,
+                         cardY + cardH - 46.0f, 1.0f, glm::vec4(0.95f, 0.85f, 0.60f, 1.0f));
+        drawTextCentered("FULL LOG SAVED IN: network_log.txt", cardX + cardW * 0.5f,
+                         cardY + cardH - 32.0f, 1.0f, glm::vec4(0.70f, 0.75f, 0.80f, 0.9f));
+    }
 
     // Button geometry
     float btnW = 360.0f;
@@ -258,7 +274,7 @@ void UIRenderer::drawPauseMenu(int screenWidth, int screenHeight, bool isFlying,
 
 int UIRenderer::getClickedMenuButton(int screenWidth, int screenHeight, double mouseX, double mouseY) const {
     float cardW = 420.0f;
-    float cardH = 380.0f;
+    float cardH = 415.0f;
     float cardY = (screenHeight - cardH) * 0.5f;
 
     float btnW = 360.0f;

@@ -83,10 +83,14 @@ public:
     bool isConnected() const { return m_connState == ConnectionState::CONNECTED; }
     int getClientCount() const;
     uint32_t getLocalId() const { return m_localId; }
+    std::string getLastError() const { return m_lastError; }
+    std::string getErrorDiagnosis() const { return m_errorDiagnosis; }
 
 private:
     NetworkMode m_mode = NetworkMode::OFFLINE;
     std::atomic<ConnectionState> m_connState{ConnectionState::OFFLINE};
+    std::string m_lastError;
+    std::string m_errorDiagnosis;
     uint32_t m_localId = 0;
     std::atomic<bool> m_running{false};
 

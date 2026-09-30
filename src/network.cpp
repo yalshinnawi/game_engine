@@ -1,6 +1,57 @@
 #include "network.h"
 #include <iostream>
+#include <fstream>
+#include <chrono>
+#include <ctime>
+#include <iomanip>
+#include <sstream>
 #include <cstring>
+
+static void writeNetworkLog(const std::string& level, const std::string& msg, const std::string& advice = "") {
+    try {
+        std::ofstream logFile("network_log.txt", std::ios::app);
+        if (logFile.is_open()) {
+            auto now = std::chrono::system_clock::now();
+            auto in_time_t = std::chrono::system_clock::to_time_t(now);
+            std::tm tm_buf;
+#ifdef _WIN32
+            localtime_s(&tm_buf, &in_time_t);
+#else
+            localtime_r(&in_time_t, &tm_buf);
+#endif
+            logFile << "[" << std::put_time(&tm_buf, "%Y-%m-%d %H:%M:%S") << "] ["
+                    << level << "] " << msg << "\n";
+            if (!advice.empty()) {
+                logFile << "  -> ADVICE: " << advice << "\n";
+            }
+            logFile.flush();
+        }
+    } catch (...) {}
+}
+
+static std::pair<std::string, std::string> translateWinsockError(int err) {
+    switch (err) {
+        case 10061: // WSAECONNREFUSED
+            return {"Connection refused by target IP.",
+                    "Host has not pressed [HOST SERVER] (hotkey H), or port 25565 is blocked by router/firewall."};
+        case 10060: // WSAETIMEDOUT
+            return {"Connection timed out (no response).",
+                    "Windows Firewall on Host PC is blocking incoming traffic. Ensure VoxelEngine is allowed on both Private and Public networks."};
+        case 10065: // WSAEHOSTUNREACH
+            return {"Host unreachable.",
+                    "The IP address in server.txt cannot be reached. If using Hamachi, verify both are in the same Hamachi room with a green dot."};
+        case 10054: // WSAECONNRESET
+            return {"Connection reset by host.",
+                    "The host closed the game or terminated the server."};
+        case 10049: // WSAEADDRNOTAVAIL
+            return {"Invalid IP address.",
+                    "Check server.txt syntax (should be an IPv4 like 25.x.x.x or 192.168.x.x with no extra characters)."};
+        default:
+            return {"Winsock error code: " + std::to_string(err),
+                    "Check network connection and firewall settings."};
+    }
+}
+
 
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
@@ -193,10 +244,16 @@ void NetworkManager::serverLoop(uint16_t port) {
 
     if (bind(listenSock, reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) == SOCKET_ERROR) {
         std::cerr << "[Network] Bind failed on port " << port << std::endl;
+        m_lastError = "PORT " + std::to_string(port) + " IN USE";
+        m_errorDiagnosis = "Another program is already using port " + std::to_string(port);
+        writeNetworkLog("ERROR", "Server bind failed on port " + std::to_string(port), m_errorDiagnosis);
         closesocket(listenSock);
+        m_connState = ConnectionState::FAILED;
+        m_mode = NetworkMode::OFFLINE;
         m_running = false;
         return;
     }
+    writeNetworkLog("SERVER", "Server successfully listening on port " + std::to_string(port));
 
     if (listen(listenSock, 8) == SOCKET_ERROR) {
         std::cerr << "[Network] Listen failed." << std::endl;
@@ -357,9 +414,21 @@ void NetworkManager::clientLoop(std::string host, uint16_t port) {
     }
 
     std::cout << "[Network] Connecting to server at " << host << ":" << port << "..." << std::endl;
+    writeNetworkLog("CLIENT", "Attempting connection to " + host + ":" + std::to_string(port) + "...");
 
     if (connect(clientSock, reinterpret_cast<sockaddr*>(&serverAddr), sizeof(serverAddr)) == SOCKET_ERROR) {
-        std::cerr << "[Network] Connection to server failed! Check host IP / Firewall." << std::endl;
+#ifdef _WIN32
+        int err = WSAGetLastError();
+#else
+        int err = 0;
+#endif
+        auto [desc, advice] = translateWinsockError(err);
+        m_lastError = "ERR " + std::to_string(err) + ": " + desc;
+        m_errorDiagnosis = advice;
+        std::cerr << "[Network] Connection failed! Error: " << err << " - " << desc << std::endl;
+        std::cerr << "[Network] Advice: " << advice << std::endl;
+        writeNetworkLog("ERROR", "Failed to connect to " + host + ":" + std::to_string(port) + " (Error " + std::to_string(err) + ": " + desc + ")", advice);
+
         closesocket(clientSock);
         m_connState = ConnectionState::FAILED;
         m_mode = NetworkMode::OFFLINE;
@@ -379,6 +448,7 @@ void NetworkManager::clientLoop(std::string host, uint16_t port) {
             m_localId = assignedId;
             m_connState = ConnectionState::CONNECTED;
             std::cout << "[Network] Connected to server! Assigned Player ID: #" << m_localId << std::endl;
+            writeNetworkLog("CLIENT", "Connected to " + host + ":" + std::to_string(port) + " as Player #" + std::to_string(assignedId));
         } else {
             std::cerr << "[Network] Failed to receive assigned player ID." << std::endl;
             m_connState = ConnectionState::FAILED;

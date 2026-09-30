@@ -36,6 +36,7 @@ public:
     void drawPauseMenu(int screenWidth, int screenHeight, bool isFlying,
                        NetworkMode netMode, ConnectionState connState, int clientCount,
                        uint32_t localId, const std::string& targetIP,
+                       const std::string& errorSummary, const std::string& errorDiagnosis,
                        double mouseX, double mouseY, int& outHovered);
 
     int getClickedMenuButton(int screenWidth, int screenHeight, double mouseX, double mouseY) const;

@@ -360,6 +360,7 @@ int main(int argc, char* argv[]) {
                     uiRenderer.drawPauseMenu(window.getWidth(), window.getHeight(), player.isFlying(),
                                             network.getMode(), network.getConnectionState(),
                                             network.getClientCount(), network.getLocalId(), targetIP,
+                                            network.getLastError(), network.getErrorDiagnosis(),
                                             input.getMouseX(), input.getMouseY(), hovered);
                 }
                 uiRenderer.end();
