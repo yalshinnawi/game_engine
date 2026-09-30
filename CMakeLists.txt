@@ -57,6 +57,8 @@ set(ENGINE_SOURCES
 
 add_executable(${PROJECT_NAME} ${ENGINE_SOURCES})
 
+target_compile_definitions(${PROJECT_NAME} PRIVATE GLFW_INCLUDE_NONE)
+
 target_include_directories(${PROJECT_NAME} PRIVATE
     include
     ${stb_SOURCE_DIR}

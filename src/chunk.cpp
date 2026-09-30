@@ -1,6 +1,7 @@
 #include "chunk.h"
 #include <FastNoiseLite.h>
 #include <cmath>
+#include <algorithm>
 #include <iostream>
 
 namespace voxel {
