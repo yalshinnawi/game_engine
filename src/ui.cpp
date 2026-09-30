@@ -1,4 +1,5 @@
 #include "ui.h"
+#include "font8x8.h"
 #include <glm/gtc/matrix_transform.hpp>
 #include <iostream>
 
@@ -18,8 +19,8 @@ void UIRenderer::init(const std::string& shaderDir) {
     glBindVertexArray(m_vao);
     glBindBuffer(GL_ARRAY_BUFFER, m_vbo);
 
-    // Dynamic buffer
-    glBufferData(GL_ARRAY_BUFFER, 2048 * sizeof(UIVertex), nullptr, GL_DYNAMIC_DRAW);
+    // Dynamic buffer with plenty of capacity for quads & text
+    glBufferData(GL_ARRAY_BUFFER, 65536 * sizeof(UIVertex), nullptr, GL_DYNAMIC_DRAW);
 
     // aPos (location 0)
     glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(UIVertex), (void*)offsetof(UIVertex, pos));
@@ -108,6 +109,47 @@ void UIRenderer::drawCrosshair(int screenWidth, int screenHeight) {
     drawRect(cx - thick * 0.5f, cy - size, thick, size * 2.0f, chColor);
 }
 
+void UIRenderer::drawChar(char c, float x, float y, float scale, const glm::vec4& color) {
+    uint8_t uc = static_cast<uint8_t>(c);
+    if (uc >= 128) uc = '?';
+
+    const uint8_t* glyph = font8x8_basic[uc];
+    for (int row = 0; row < 8; row++) {
+        uint8_t byte = glyph[row];
+        for (int col = 0; col < 8; col++) {
+            if ((byte >> col) & 1) {
+                drawRect(x + col * scale, y + row * scale, scale, scale, color);
+            }
+        }
+    }
+}
+
+void UIRenderer::drawText(const std::string& text, float x, float y, float scale, const glm::vec4& color, bool shadow) {
+    if (shadow) {
+        glm::vec4 shadowColor(0.0f, 0.0f, 0.0f, color.a * 0.8f);
+        float curX = x + scale;
+        float curY = y + scale;
+        for (char c : text) {
+            drawChar(c, curX, curY, scale, shadowColor);
+            curX += 8.0f * scale;
+        }
+    }
+
+    float curX = x;
+    for (char c : text) {
+        drawChar(c, curX, y, scale, color);
+        curX += 8.0f * scale;
+    }
+}
+
+void UIRenderer::drawTextCentered(const std::string& text, float centerX, float centerY, float scale, const glm::vec4& color, bool shadow) {
+    float totalW = text.length() * 8.0f * scale;
+    float totalH = 8.0f * scale;
+    float startX = centerX - totalW * 0.5f;
+    float startY = centerY - totalH * 0.5f;
+    drawText(text, startX, startY, scale, color, shadow);
+}
+
 void UIRenderer::drawPauseMenu(int screenWidth, int screenHeight, bool isFlying,
                                NetworkMode netMode, int clientCount,
                                double mouseX, double mouseY, int& outHovered) {
@@ -128,6 +170,10 @@ void UIRenderer::drawPauseMenu(int screenWidth, int screenHeight, bool isFlying,
     drawRect(cardX, cardY, cardW, 46.0f, glm::vec4(0.16f, 0.20f, 0.28f, 1.0f));
     drawRect(cardX, cardY + 44.0f, cardW, 2.0f, glm::vec4(0.25f, 0.65f, 0.95f, 1.0f));
 
+    // Header Title Text
+    drawTextCentered("GAME PAUSED", cardX + cardW * 0.5f, cardY + 23.0f, 2.0f,
+                     glm::vec4(0.95f, 0.95f, 1.0f, 1.0f));
+
     // Button geometry
     float btnW = 360.0f;
     float btnH = 44.0f;
@@ -147,39 +193,49 @@ void UIRenderer::drawPauseMenu(int screenWidth, int screenHeight, bool isFlying,
         glm::vec4 btnBg;
         glm::vec4 btnBorder;
         glm::vec4 accentColor;
+        std::string btnText;
 
         if (i == 0) {
             // Resume Game
             btnBg = hovered ? glm::vec4(0.20f, 0.35f, 0.25f, 1.0f) : glm::vec4(0.14f, 0.20f, 0.18f, 1.0f);
             btnBorder = hovered ? glm::vec4(0.40f, 0.85f, 0.50f, 1.0f) : glm::vec4(0.28f, 0.50f, 0.35f, 0.8f);
             accentColor = glm::vec4(0.35f, 0.85f, 0.45f, 1.0f);
+            btnText = "RESUME GAME";
         } else if (i == 1) {
             // Toggle Game Mode
             btnBg = hovered ? glm::vec4(0.18f, 0.28f, 0.40f, 1.0f) : glm::vec4(0.14f, 0.18f, 0.26f, 1.0f);
             btnBorder = hovered ? glm::vec4(0.35f, 0.65f, 0.90f, 1.0f) : glm::vec4(0.22f, 0.40f, 0.60f, 0.8f);
             accentColor = isFlying ? glm::vec4(0.95f, 0.75f, 0.25f, 1.0f) : glm::vec4(0.25f, 0.75f, 0.95f, 1.0f);
+            btnText = isFlying ? "MODE: CREATIVE (FLY)" : "MODE: SURVIVAL (WALK)";
         } else if (i == 2) {
             // Host Server
             bool isHost = (netMode == NetworkMode::SERVER);
             btnBg = hovered ? glm::vec4(0.35f, 0.25f, 0.40f, 1.0f) : glm::vec4(0.20f, 0.15f, 0.25f, 1.0f);
             btnBorder = isHost ? glm::vec4(0.70f, 0.40f, 0.95f, 1.0f) : (hovered ? glm::vec4(0.65f, 0.45f, 0.85f, 1.0f) : glm::vec4(0.40f, 0.30f, 0.55f, 0.8f));
             accentColor = isHost ? glm::vec4(0.40f, 0.95f, 0.40f, 1.0f) : glm::vec4(0.80f, 0.45f, 0.95f, 1.0f);
+            btnText = isHost ? ("HOSTING (" + std::to_string(clientCount + 1) + " PLAYERS)") : "HOST SERVER (PORT 25565)";
         } else if (i == 3) {
             // Connect to Client
             bool isClient = (netMode == NetworkMode::CLIENT);
             btnBg = hovered ? glm::vec4(0.25f, 0.35f, 0.35f, 1.0f) : glm::vec4(0.15f, 0.22f, 0.22f, 1.0f);
             btnBorder = isClient ? glm::vec4(0.35f, 0.90f, 0.85f, 1.0f) : (hovered ? glm::vec4(0.45f, 0.80f, 0.75f, 1.0f) : glm::vec4(0.30f, 0.50f, 0.48f, 0.8f));
             accentColor = isClient ? glm::vec4(0.35f, 0.95f, 0.85f, 1.0f) : glm::vec4(0.40f, 0.75f, 0.70f, 1.0f);
+            btnText = isClient ? "CONNECTED TO SERVER" : "JOIN LOCALHOST (25565)";
         } else {
             // Quit
             btnBg = hovered ? glm::vec4(0.38f, 0.18f, 0.20f, 1.0f) : glm::vec4(0.22f, 0.14f, 0.16f, 1.0f);
             btnBorder = hovered ? glm::vec4(0.95f, 0.40f, 0.45f, 1.0f) : glm::vec4(0.55f, 0.28f, 0.32f, 0.8f);
             accentColor = glm::vec4(0.95f, 0.35f, 0.40f, 1.0f);
+            btnText = "QUIT TO DESKTOP";
         }
 
         drawRect(btnX, by, btnW, btnH, btnBg);
         drawRectOutline(btnX, by, btnW, btnH, hovered ? 2.5f : 1.5f, btnBorder);
         drawRect(btnX + 4.0f, by + 6.0f, 6.0f, btnH - 12.0f, accentColor);
+
+        // Draw Button Text
+        glm::vec4 txtColor = hovered ? glm::vec4(1.0f, 1.0f, 1.0f, 1.0f) : glm::vec4(0.85f, 0.88f, 0.92f, 0.9f);
+        drawTextCentered(btnText, btnX + btnW * 0.5f, by + btnH * 0.5f, 1.75f, txtColor);
     }
 }
 

@@ -27,6 +27,11 @@ public:
     void drawRectOutline(float x, float y, float w, float h, float thickness, const glm::vec4& color);
     void drawCrosshair(int screenWidth, int screenHeight);
 
+    // Text rendering with Minecraft-style pixel font
+    void drawChar(char c, float x, float y, float scale, const glm::vec4& color);
+    void drawText(const std::string& text, float x, float y, float scale, const glm::vec4& color, bool shadow = true);
+    void drawTextCentered(const std::string& text, float centerX, float centerY, float scale, const glm::vec4& color, bool shadow = true);
+
     // Pause menu rendering and hit testing
     void drawPauseMenu(int screenWidth, int screenHeight, bool isFlying,
                        NetworkMode netMode, int clientCount,
