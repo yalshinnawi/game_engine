@@ -1,96 +1,109 @@
 #include "input.h"
+#include "window.h"
 #include <iostream>
 
 namespace voxel {
 
-Input::Input(GLFWwindow* window, Camera& camera)
+Input::Input(Window& window, Camera& camera)
     : m_window(window), m_camera(camera) {
 
-    // Store this pointer for static callbacks
-    glfwSetWindowUserPointer(window, this);
-    glfwSetCursorPosCallback(window, mouseCallback);
-    glfwSetScrollCallback(window, scrollCallback);
+    // Register callbacks with Window
+    window.setCursorPosCallback([this](double x, double y) { onMouseMove(x, y); });
+    window.setMouseButtonCallback([this](int b, int a, int m) { onMouseButton(b, a, m); });
+    window.setScrollCallback([this](double x, double y) { onScroll(x, y); });
+    window.setKeyCallback([this](int k, int sc, int a, int m) { onKey(k, sc, a, m); });
 
-    // Capture cursor
-    glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
-
-    // Initialize mouse position
-    glfwGetCursorPos(window, &m_lastMouseX, &m_lastMouseY);
+    // Capture cursor initially
+    setCursorCaptured(true);
 }
 
-void Input::processInput(float deltaTime) {
-    // Escape to release cursor
-    if (wasKeyJustPressed(GLFW_KEY_ESCAPE)) {
-        toggleCursor();
+void Input::update() {
+    // Clear just-pressed flags
+    for (int i = 0; i <= GLFW_KEY_LAST; i++) {
+        m_keyJustPressed[i] = false;
     }
-
-    // Movement (only when cursor captured)
-    if (m_cursorCaptured) {
-        if (isKeyPressed(GLFW_KEY_W)) m_camera.processKeyboard(Camera::FORWARD, deltaTime);
-        if (isKeyPressed(GLFW_KEY_S)) m_camera.processKeyboard(Camera::BACKWARD, deltaTime);
-        if (isKeyPressed(GLFW_KEY_A)) m_camera.processKeyboard(Camera::LEFT, deltaTime);
-        if (isKeyPressed(GLFW_KEY_D)) m_camera.processKeyboard(Camera::RIGHT, deltaTime);
-        if (isKeyPressed(GLFW_KEY_SPACE)) m_camera.processKeyboard(Camera::UP, deltaTime);
-        if (isKeyPressed(GLFW_KEY_LEFT_SHIFT)) m_camera.processKeyboard(Camera::DOWN, deltaTime);
-    }
-
-    // Sprint
-    if (isKeyPressed(GLFW_KEY_LEFT_CONTROL)) {
-        m_camera.movementSpeed = 30.0f;
-    } else {
-        m_camera.movementSpeed = 10.0f;
-    }
-
-    // Close window
-    if (isKeyPressed(GLFW_KEY_Q)) {
-        glfwSetWindowShouldClose(m_window, true);
+    for (int i = 0; i <= GLFW_MOUSE_BUTTON_LAST; i++) {
+        m_mouseButtonJustPressed[i] = false;
     }
 }
 
 bool Input::isKeyPressed(int key) const {
-    return glfwGetKey(m_window, key) == GLFW_PRESS;
+    if (key < 0 || key > GLFW_KEY_LAST) return false;
+    return m_keyStates[key];
 }
 
 bool Input::wasKeyJustPressed(int key) {
-    bool pressed = glfwGetKey(m_window, key) == GLFW_PRESS;
-    bool justPressed = pressed && !m_keyStates[key];
-    m_keyStates[key] = pressed;
-    return justPressed;
+    if (key < 0 || key > GLFW_KEY_LAST) return false;
+    return m_keyJustPressed[key];
 }
 
-void Input::toggleCursor() {
-    m_cursorCaptured = !m_cursorCaptured;
-    glfwSetInputMode(m_window, GLFW_CURSOR,
-                     m_cursorCaptured ? GLFW_CURSOR_DISABLED : GLFW_CURSOR_NORMAL);
+bool Input::isMouseButtonPressed(int button) const {
+    if (button < 0 || button > GLFW_MOUSE_BUTTON_LAST) return false;
+    return m_mouseButtonStates[button];
+}
+
+bool Input::wasMouseButtonJustPressed(int button) {
+    if (button < 0 || button > GLFW_MOUSE_BUTTON_LAST) return false;
+    return m_mouseButtonJustPressed[button];
+}
+
+void Input::setCursorCaptured(bool captured) {
+    m_cursorCaptured = captured;
+    m_window.setCursorMode(captured ? GLFW_CURSOR_DISABLED : GLFW_CURSOR_NORMAL);
     m_firstMouse = true;
 }
 
-void Input::mouseCallback(GLFWwindow* window, double xpos, double ypos) {
-    auto* self = static_cast<Input*>(glfwGetWindowUserPointer(window));
-    if (!self || !self->m_cursorCaptured) return;
-
-    self->m_mouseX = xpos;
-    self->m_mouseY = ypos;
-
-    if (self->m_firstMouse) {
-        self->m_lastMouseX = xpos;
-        self->m_lastMouseY = ypos;
-        self->m_firstMouse = false;
-    }
-
-    double xOffset = xpos - self->m_lastMouseX;
-    double yOffset = self->m_lastMouseY - ypos; // Reversed: y goes bottom-to-top
-
-    self->m_lastMouseX = xpos;
-    self->m_lastMouseY = ypos;
-
-    self->m_camera.processMouse(static_cast<float>(xOffset), static_cast<float>(yOffset));
+void Input::toggleCursor() {
+    setCursorCaptured(!m_cursorCaptured);
 }
 
-void Input::scrollCallback(GLFWwindow* window, double /*xoffset*/, double yoffset) {
-    auto* self = static_cast<Input*>(glfwGetWindowUserPointer(window));
-    if (!self) return;
-    self->m_camera.processScroll(static_cast<float>(yoffset));
+void Input::onMouseMove(double xpos, double ypos) {
+    m_mouseX = xpos;
+    m_mouseY = ypos;
+
+    if (!m_cursorCaptured) return;
+
+    if (m_firstMouse) {
+        m_lastMouseX = xpos;
+        m_lastMouseY = ypos;
+        m_firstMouse = false;
+        return;
+    }
+
+    double xOffset = xpos - m_lastMouseX;
+    double yOffset = m_lastMouseY - ypos;
+
+    m_lastMouseX = xpos;
+    m_lastMouseY = ypos;
+
+    m_camera.processMouse(static_cast<float>(xOffset), static_cast<float>(yOffset));
+}
+
+void Input::onMouseButton(int button, int action, int /*mods*/) {
+    if (button < 0 || button > GLFW_MOUSE_BUTTON_LAST) return;
+    if (action == GLFW_PRESS) {
+        m_mouseButtonStates[button] = true;
+        m_mouseButtonJustPressed[button] = true;
+    } else if (action == GLFW_RELEASE) {
+        m_mouseButtonStates[button] = false;
+    }
+}
+
+void Input::onScroll(double /*xoffset*/, double yoffset) {
+    m_scrollDelta += static_cast<int>(yoffset);
+    if (m_cursorCaptured) {
+        m_camera.processScroll(static_cast<float>(yoffset));
+    }
+}
+
+void Input::onKey(int key, int /*scancode*/, int action, int /*mods*/) {
+    if (key < 0 || key > GLFW_KEY_LAST) return;
+    if (action == GLFW_PRESS) {
+        m_keyStates[key] = true;
+        m_keyJustPressed[key] = true;
+    } else if (action == GLFW_RELEASE) {
+        m_keyStates[key] = false;
+    }
 }
 
 } // namespace voxel

@@ -7,6 +7,8 @@
 
 namespace voxel {
 
+class World;
+
 // Block type enumeration
 enum class BlockType : uint8_t {
     AIR = 0,
@@ -47,7 +49,7 @@ public:
     Chunk& operator=(Chunk&& other) noexcept;
 
     void generateTerrain(int seed);
-    void buildMesh();
+    void buildMesh(const World* world = nullptr);
     void render() const;
 
     BlockType getBlock(int x, int y, int z) const;
@@ -69,11 +71,7 @@ private:
     bool m_meshBuilt = false;
 
     int blockIndex(int x, int y, int z) const;
-    bool isBlockSolid(int x, int y, int z) const;
-    void addFace(std::vector<BlockVertex>& vertices, std::vector<GLuint>& indices,
-                 const glm::vec3& pos, const glm::vec3& normal,
-                 const glm::vec3& right, const glm::vec3& up,
-                 BlockType type);
+    bool isBlockSolid(int x, int y, int z, const World* world) const;
     void uploadMesh(const std::vector<BlockVertex>& vertices, const std::vector<GLuint>& indices);
     void cleanup();
 };

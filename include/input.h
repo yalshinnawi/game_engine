@@ -1,27 +1,39 @@
 #pragma once
-#include "camera.h"
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
+#include "camera.h"
 
 namespace voxel {
 
+class Window;
+
 class Input {
 public:
-    Input(GLFWwindow* window, Camera& camera);
+    Input(Window& window, Camera& camera);
 
-    void processInput(float deltaTime);
+    void update();
 
     bool isKeyPressed(int key) const;
     bool wasKeyJustPressed(int key);
 
-    // Mouse state
+    bool isMouseButtonPressed(int button) const;
+    bool wasMouseButtonJustPressed(int button);
+
     double getMouseX() const { return m_mouseX; }
     double getMouseY() const { return m_mouseY; }
+
     bool isCursorCaptured() const { return m_cursorCaptured; }
+    void setCursorCaptured(bool captured);
     void toggleCursor();
 
+    int getScrollDelta() {
+        int delta = m_scrollDelta;
+        m_scrollDelta = 0;
+        return delta;
+    }
+
 private:
-    GLFWwindow* m_window;
+    Window& m_window;
     Camera& m_camera;
 
     double m_mouseX = 0.0, m_mouseY = 0.0;
@@ -29,11 +41,18 @@ private:
     bool m_firstMouse = true;
     bool m_cursorCaptured = true;
 
-    // Key state tracking for "just pressed" detection
-    bool m_keyStates[GLFW_KEY_LAST + 1] = {};
+    int m_scrollDelta = 0;
 
-    static void mouseCallback(GLFWwindow* window, double xpos, double ypos);
-    static void scrollCallback(GLFWwindow* window, double xoffset, double yoffset);
+    bool m_keyStates[GLFW_KEY_LAST + 1] = {};
+    bool m_keyJustPressed[GLFW_KEY_LAST + 1] = {};
+
+    bool m_mouseButtonStates[GLFW_MOUSE_BUTTON_LAST + 1] = {};
+    bool m_mouseButtonJustPressed[GLFW_MOUSE_BUTTON_LAST + 1] = {};
+
+    void onMouseMove(double xpos, double ypos);
+    void onMouseButton(int button, int action, int mods);
+    void onScroll(double xoffset, double yoffset);
+    void onKey(int key, int scancode, int action, int mods);
 };
 
 } // namespace voxel

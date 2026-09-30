@@ -8,8 +8,9 @@ static void glfwErrorCallback(int error, const char* description) {
     std::cerr << "[GLFW Error " << error << "] " << description << std::endl;
 }
 
-Window::Window(int width, int height, const std::string& title)
-    : m_width(width), m_height(height), m_title(title) {
+Window::Window(int width, int height, const std::string& title) {
+    m_data.width = width;
+    m_data.height = height;
 
     glfwSetErrorCallback(glfwErrorCallback);
 
@@ -17,11 +18,10 @@ Window::Window(int width, int height, const std::string& title)
         throw std::runtime_error("Failed to initialize GLFW");
     }
 
-    // Request OpenGL 4.3 Core
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-    glfwWindowHint(GLFW_SAMPLES, 4); // MSAA
+    glfwWindowHint(GLFW_SAMPLES, 4);
 
 #ifdef __APPLE__
     glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
@@ -35,21 +35,24 @@ Window::Window(int width, int height, const std::string& title)
 
     glfwMakeContextCurrent(m_window);
 
-    // Load OpenGL functions via GLAD
     if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)) {
         glfwDestroyWindow(m_window);
         glfwTerminate();
         throw std::runtime_error("Failed to initialize GLAD");
     }
 
-    // Enable VSync
     glfwSwapInterval(1);
 
-    // Store this pointer for callbacks
-    glfwSetWindowUserPointer(m_window, this);
-    glfwSetFramebufferSizeCallback(m_window, framebufferSizeCallback);
+    // Set user pointer to WindowData
+    glfwSetWindowUserPointer(m_window, &m_data);
 
-    // Print GPU info
+    // Register callbacks
+    glfwSetFramebufferSizeCallback(m_window, framebufferSizeCallback);
+    glfwSetCursorPosCallback(m_window, cursorPosCallback);
+    glfwSetMouseButtonCallback(m_window, mouseButtonCallback);
+    glfwSetScrollCallback(m_window, scrollCallback);
+    glfwSetKeyCallback(m_window, keyCallback);
+
     std::cout << "========================================" << std::endl;
     std::cout << "  VoxelEngine Initialized" << std::endl;
     std::cout << "  OpenGL: " << glGetString(GL_VERSION) << std::endl;
@@ -78,7 +81,23 @@ void Window::pollEvents() {
 }
 
 void Window::setResizeCallback(std::function<void(int, int)> callback) {
-    m_resizeCallback = std::move(callback);
+    m_data.resizeCallback = std::move(callback);
+}
+
+void Window::setCursorPosCallback(std::function<void(double, double)> callback) {
+    m_data.cursorPosCallback = std::move(callback);
+}
+
+void Window::setMouseButtonCallback(std::function<void(int, int, int)> callback) {
+    m_data.mouseButtonCallback = std::move(callback);
+}
+
+void Window::setScrollCallback(std::function<void(double, double)> callback) {
+    m_data.scrollCallback = std::move(callback);
+}
+
+void Window::setKeyCallback(std::function<void(int, int, int, int)> callback) {
+    m_data.keyCallback = std::move(callback);
 }
 
 void Window::setCursorMode(int mode) {
@@ -86,12 +105,44 @@ void Window::setCursorMode(int mode) {
 }
 
 void Window::framebufferSizeCallback(GLFWwindow* window, int width, int height) {
-    auto* self = static_cast<Window*>(glfwGetWindowUserPointer(window));
-    self->m_width = width;
-    self->m_height = height;
+    if (width <= 0 || height <= 0) return;
+    auto* data = static_cast<WindowData*>(glfwGetWindowUserPointer(window));
+    if (!data) return;
+
+    data->width = width;
+    data->height = height;
     glViewport(0, 0, width, height);
-    if (self->m_resizeCallback) {
-        self->m_resizeCallback(width, height);
+
+    if (data->resizeCallback) {
+        data->resizeCallback(width, height);
+    }
+}
+
+void Window::cursorPosCallback(GLFWwindow* window, double xpos, double ypos) {
+    auto* data = static_cast<WindowData*>(glfwGetWindowUserPointer(window));
+    if (data && data->cursorPosCallback) {
+        data->cursorPosCallback(xpos, ypos);
+    }
+}
+
+void Window::mouseButtonCallback(GLFWwindow* window, int button, int action, int mods) {
+    auto* data = static_cast<WindowData*>(glfwGetWindowUserPointer(window));
+    if (data && data->mouseButtonCallback) {
+        data->mouseButtonCallback(button, action, mods);
+    }
+}
+
+void Window::scrollCallback(GLFWwindow* window, double xoffset, double yoffset) {
+    auto* data = static_cast<WindowData*>(glfwGetWindowUserPointer(window));
+    if (data && data->scrollCallback) {
+        data->scrollCallback(xoffset, yoffset);
+    }
+}
+
+void Window::keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods) {
+    auto* data = static_cast<WindowData*>(glfwGetWindowUserPointer(window));
+    if (data && data->keyCallback) {
+        data->keyCallback(key, scancode, action, mods);
     }
 }
 

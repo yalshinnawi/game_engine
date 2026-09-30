@@ -53,6 +53,8 @@ set(ENGINE_SOURCES
     src/world.cpp
     src/renderer.cpp
     src/input.cpp
+    src/player.cpp
+    src/ui.cpp
 )
 
 add_executable(${PROJECT_NAME} ${ENGINE_SOURCES})

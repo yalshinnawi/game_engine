@@ -17,6 +17,7 @@ public:
     void processScroll(float yOffset);
 
     glm::vec3 getPosition() const { return m_position; }
+    void setPosition(const glm::vec3& pos) { m_position = pos; }
     glm::vec3 getFront() const { return m_front; }
     float getFov() const { return m_fov; }
 

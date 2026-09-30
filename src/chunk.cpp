@@ -1,4 +1,5 @@
 #include "chunk.h"
+#include "world.h"
 #include <FastNoiseLite.h>
 #include <cmath>
 #include <algorithm>
@@ -73,11 +74,9 @@ void Chunk::generateTerrain(int seed) {
             float wx = static_cast<float>(worldX + x);
             float wz = static_cast<float>(worldZ + z);
 
-            // Multi-octave terrain height
             float continent = continentNoise.GetNoise(wx, wz);
             float detail = detailNoise.GetNoise(wx, wz);
 
-            // Combine noise layers for varied terrain
             float heightNorm = (continent * 0.7f + detail * 0.3f + 1.0f) * 0.5f;
             int terrainHeight = static_cast<int>(heightNorm * 40.0f) + 40;
             terrainHeight = std::clamp(terrainHeight, 1, CHUNK_SIZE_Y - 1);
@@ -85,15 +84,12 @@ void Chunk::generateTerrain(int seed) {
             int waterLevel = 52;
 
             for (int y = 0; y < CHUNK_SIZE_Y; y++) {
-                // Bedrock layer
                 if (y == 0) {
                     setBlock(x, y, z, BlockType::BEDROCK);
                     continue;
                 }
 
-                // Below terrain surface
                 if (y < terrainHeight) {
-                    // Check for caves
                     float caveVal = caveNoise.GetNoise(wx, static_cast<float>(y), wz);
                     if (caveVal > 0.6f && y > 5 && y < terrainHeight - 3) {
                         setBlock(x, y, z, BlockType::AIR);
@@ -105,7 +101,6 @@ void Chunk::generateTerrain(int seed) {
                     } else if (y < terrainHeight - 1) {
                         setBlock(x, y, z, BlockType::DIRT);
                     } else {
-                        // Surface block
                         if (terrainHeight > 72) {
                             setBlock(x, y, z, BlockType::SNOW);
                         } else if (terrainHeight < waterLevel + 2) {
@@ -114,9 +109,7 @@ void Chunk::generateTerrain(int seed) {
                             setBlock(x, y, z, BlockType::GRASS);
                         }
                     }
-                }
-                // Water fill
-                else if (y < waterLevel) {
+                } else if (y < waterLevel) {
                     setBlock(x, y, z, BlockType::WATER);
                 }
             }
@@ -125,46 +118,12 @@ void Chunk::generateTerrain(int seed) {
     m_dirty = true;
 }
 
-void Chunk::buildMesh() {
+void Chunk::buildMesh(const World* world) {
     std::vector<BlockVertex> vertices;
     std::vector<GLuint> indices;
 
-    // Reserve rough estimate
     vertices.reserve(CHUNK_SIZE_X * CHUNK_SIZE_Z * 24);
     indices.reserve(CHUNK_SIZE_X * CHUNK_SIZE_Z * 36);
-
-    // Face normals and tangent vectors
-    const glm::vec3 normals[] = {
-        { 0,  1,  0}, // Top
-        { 0, -1,  0}, // Bottom
-        { 0,  0,  1}, // Front (+Z)
-        { 0,  0, -1}, // Back (-Z)
-        { 1,  0,  0}, // Right (+X)
-        {-1,  0,  0}, // Left (-X)
-    };
-
-    // Right and Up vectors for each face
-    const glm::vec3 rights[] = {
-        { 1, 0,  0}, // Top
-        { 1, 0,  0}, // Bottom
-        { 1, 0,  0}, // Front
-        {-1, 0,  0}, // Back
-        { 0, 0, -1}, // Right
-        { 0, 0,  1}, // Left
-    };
-    const glm::vec3 ups[] = {
-        {0, 0, 1},  // Top
-        {0, 0, 1},  // Bottom
-        {0, 1, 0},  // Front
-        {0, 1, 0},  // Back
-        {0, 1, 0},  // Right
-        {0, 1, 0},  // Left
-    };
-
-    // Neighbor offsets matching normals order
-    const int dx[] = { 0,  0,  0,  0,  1, -1};
-    const int dy[] = { 1, -1,  0,  0,  0,  0};
-    const int dz[] = { 0,  0,  1, -1,  0,  0};
 
     for (int x = 0; x < CHUNK_SIZE_X; x++) {
         for (int y = 0; y < CHUNK_SIZE_Y; y++) {
@@ -172,22 +131,95 @@ void Chunk::buildMesh() {
                 BlockType block = getBlock(x, y, z);
                 if (block == BlockType::AIR) continue;
 
-                glm::vec3 pos(
-                    static_cast<float>(m_chunkX * CHUNK_SIZE_X + x),
-                    static_cast<float>(y),
-                    static_cast<float>(m_chunkZ * CHUNK_SIZE_Z + z)
-                );
+                float x0 = static_cast<float>(m_chunkX * CHUNK_SIZE_X + x);
+                float x1 = x0 + 1.0f;
+                float y0 = static_cast<float>(y);
+                float y1 = y0 + 1.0f;
+                float z0 = static_cast<float>(m_chunkZ * CHUNK_SIZE_Z + z);
+                float z1 = z0 + 1.0f;
+                float bt = static_cast<float>(block);
 
-                // Check each face
-                for (int face = 0; face < 6; face++) {
-                    int nx = x + dx[face];
-                    int ny = y + dy[face];
-                    int nz = z + dz[face];
+                auto appendQuad = [&](const BlockVertex& v0, const BlockVertex& v1,
+                                     const BlockVertex& v2, const BlockVertex& v3) {
+                    GLuint base = static_cast<GLuint>(vertices.size());
+                    vertices.push_back(v0);
+                    vertices.push_back(v1);
+                    vertices.push_back(v2);
+                    vertices.push_back(v3);
 
-                    if (!isBlockSolid(nx, ny, nz)) {
-                        addFace(vertices, indices, pos, normals[face],
-                                rights[face], ups[face], block);
-                    }
+                    // Counter-clockwise winding: 0-1-2 and 0-2-3
+                    indices.push_back(base + 0);
+                    indices.push_back(base + 1);
+                    indices.push_back(base + 2);
+                    indices.push_back(base + 0);
+                    indices.push_back(base + 2);
+                    indices.push_back(base + 3);
+                };
+
+                // 1. TOP (+Y)
+                if (!isBlockSolid(x, y + 1, z, world)) {
+                    glm::vec3 n(0, 1, 0);
+                    appendQuad(
+                        BlockVertex{{x0, y1, z1}, n, {0.0f, 0.0f}, bt},
+                        BlockVertex{{x1, y1, z1}, n, {1.0f, 0.0f}, bt},
+                        BlockVertex{{x1, y1, z0}, n, {1.0f, 1.0f}, bt},
+                        BlockVertex{{x0, y1, z0}, n, {0.0f, 1.0f}, bt}
+                    );
+                }
+
+                // 2. BOTTOM (-Y)
+                if (!isBlockSolid(x, y - 1, z, world)) {
+                    glm::vec3 n(0, -1, 0);
+                    appendQuad(
+                        BlockVertex{{x0, y0, z0}, n, {0.0f, 0.0f}, bt},
+                        BlockVertex{{x1, y0, z0}, n, {1.0f, 0.0f}, bt},
+                        BlockVertex{{x1, y0, z1}, n, {1.0f, 1.0f}, bt},
+                        BlockVertex{{x0, y0, z1}, n, {0.0f, 1.0f}, bt}
+                    );
+                }
+
+                // 3. FRONT (+Z)
+                if (!isBlockSolid(x, y, z + 1, world)) {
+                    glm::vec3 n(0, 0, 1);
+                    appendQuad(
+                        BlockVertex{{x0, y0, z1}, n, {0.0f, 0.0f}, bt},
+                        BlockVertex{{x1, y0, z1}, n, {1.0f, 0.0f}, bt},
+                        BlockVertex{{x1, y1, z1}, n, {1.0f, 1.0f}, bt},
+                        BlockVertex{{x0, y1, z1}, n, {0.0f, 1.0f}, bt}
+                    );
+                }
+
+                // 4. BACK (-Z)
+                if (!isBlockSolid(x, y, z - 1, world)) {
+                    glm::vec3 n(0, 0, -1);
+                    appendQuad(
+                        BlockVertex{{x1, y0, z0}, n, {0.0f, 0.0f}, bt},
+                        BlockVertex{{x0, y0, z0}, n, {1.0f, 0.0f}, bt},
+                        BlockVertex{{x0, y1, z0}, n, {1.0f, 1.0f}, bt},
+                        BlockVertex{{x1, y1, z0}, n, {0.0f, 1.0f}, bt}
+                    );
+                }
+
+                // 5. RIGHT (+X)
+                if (!isBlockSolid(x + 1, y, z, world)) {
+                    glm::vec3 n(1, 0, 0);
+                    appendQuad(
+                        BlockVertex{{x1, y0, z1}, n, {0.0f, 0.0f}, bt},
+                        BlockVertex{{x1, y0, z0}, n, {1.0f, 0.0f}, bt},
+                        BlockVertex{{x1, y1, z0}, n, {1.0f, 1.0f}, bt},
+                        BlockVertex{{x1, y1, z1}, n, {0.0f, 1.0f}, bt}
+                    );
+                }
+
+                // 6. LEFT (-X)
+                if (!isBlockSolid(x - 1, y, z, world)) {
+                    glm::vec3 n(-1, 0, 0);
+                    appendQuad(
+                        BlockVertex{{x0, y0, z0}, n, {0.0f, 0.0f}, bt},
+                        BlockVertex{{x0, y0, z1}, n, {1.0f, 0.0f}, bt},
+                        BlockVertex{{x0, y1, z1}, n, {1.0f, 1.0f}, bt},
+                        BlockVertex{{x0, y1, z0}, n, {0.0f, 1.0f}, bt}
+                    );
                 }
             }
         }
@@ -232,39 +264,19 @@ int Chunk::blockIndex(int x, int y, int z) const {
     return y * CHUNK_SIZE_X * CHUNK_SIZE_Z + z * CHUNK_SIZE_X + x;
 }
 
-bool Chunk::isBlockSolid(int x, int y, int z) const {
-    BlockType b = getBlock(x, y, z);
-    return b != BlockType::AIR && b != BlockType::WATER;
-}
-
-void Chunk::addFace(std::vector<BlockVertex>& vertices, std::vector<GLuint>& indices,
-                    const glm::vec3& pos, const glm::vec3& normal,
-                    const glm::vec3& right, const glm::vec3& up,
-                    BlockType type) {
-
-    GLuint baseIndex = static_cast<GLuint>(vertices.size());
-
-    float blockTypeF = static_cast<float>(type);
-
-    // Offset position to face center, then build 4 corners
-    glm::vec3 faceCenter = pos + normal * 0.5f;
-
-    glm::vec3 halfRight = right * 0.5f;
-    glm::vec3 halfUp = up * 0.5f;
-
-    // 4 vertices of the face quad
-    vertices.push_back({faceCenter - halfRight - halfUp + glm::vec3(0.5f), normal, {0.0f, 0.0f}, blockTypeF});
-    vertices.push_back({faceCenter + halfRight - halfUp + glm::vec3(0.5f), normal, {1.0f, 0.0f}, blockTypeF});
-    vertices.push_back({faceCenter + halfRight + halfUp + glm::vec3(0.5f), normal, {1.0f, 1.0f}, blockTypeF});
-    vertices.push_back({faceCenter - halfRight + halfUp + glm::vec3(0.5f), normal, {0.0f, 1.0f}, blockTypeF});
-
-    // Two triangles per face
-    indices.push_back(baseIndex + 0);
-    indices.push_back(baseIndex + 1);
-    indices.push_back(baseIndex + 2);
-    indices.push_back(baseIndex + 0);
-    indices.push_back(baseIndex + 2);
-    indices.push_back(baseIndex + 3);
+bool Chunk::isBlockSolid(int x, int y, int z, const World* world) const {
+    if (x >= 0 && x < CHUNK_SIZE_X && y >= 0 && y < CHUNK_SIZE_Y && z >= 0 && z < CHUNK_SIZE_Z) {
+        BlockType b = m_blocks[blockIndex(x, y, z)];
+        return b != BlockType::AIR && b != BlockType::WATER;
+    }
+    if (y < 0 || y >= CHUNK_SIZE_Y) return false;
+    if (world) {
+        int wx = m_chunkX * CHUNK_SIZE_X + x;
+        int wz = m_chunkZ * CHUNK_SIZE_Z + z;
+        BlockType b = world->getBlock(wx, y, wz);
+        return b != BlockType::AIR && b != BlockType::WATER;
+    }
+    return false;
 }
 
 void Chunk::uploadMesh(const std::vector<BlockVertex>& vertices, const std::vector<GLuint>& indices) {

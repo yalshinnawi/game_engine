@@ -30,6 +30,16 @@ public:
     void setRenderDistance(int distance) { m_renderDistance = distance; }
     int getRenderDistance() const { return m_renderDistance; }
 
+    // Block query and modification
+    BlockType getBlock(int wx, int wy, int wz) const;
+    void setBlock(int wx, int wy, int wz, BlockType type);
+    bool isSolidAt(int wx, int wy, int wz) const;
+    int getHighestBlock(int wx, int wz) const;
+
+    // Raycast for breaking/placing blocks
+    bool raycast(const glm::vec3& origin, const glm::vec3& dir, float maxDist,
+                 glm::ivec3& outBlock, glm::ivec3& outNormal) const;
+
 private:
     int m_seed;
     int m_renderDistance;
@@ -40,6 +50,7 @@ private:
 
     void loadChunksAroundPlayer(int playerChunkX, int playerChunkZ);
     void unloadDistantChunks(int playerChunkX, int playerChunkZ);
+    void rebuildChunkAt(int chunkX, int chunkZ);
 };
 
 } // namespace voxel
