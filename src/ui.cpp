@@ -151,7 +151,8 @@ void UIRenderer::drawTextCentered(const std::string& text, float centerX, float 
 }
 
 void UIRenderer::drawPauseMenu(int screenWidth, int screenHeight, bool isFlying,
-                               NetworkMode netMode, int clientCount, const std::string& targetIP,
+                               NetworkMode netMode, ConnectionState connState, int clientCount,
+                               uint32_t localId, const std::string& targetIP,
                                double mouseX, double mouseY, int& outHovered) {
     // Dim background
     drawRect(0.0f, 0.0f, static_cast<float>(screenWidth), static_cast<float>(screenHeight),
@@ -216,11 +217,27 @@ void UIRenderer::drawPauseMenu(int screenWidth, int screenHeight, bool isFlying,
             btnText = isHost ? ("HOSTING (" + std::to_string(clientCount + 1) + " PLAYERS)") : "HOST SERVER (PORT 25565)";
         } else if (i == 3) {
             // Connect to Client
-            bool isClient = (netMode == NetworkMode::CLIENT);
-            btnBg = hovered ? glm::vec4(0.25f, 0.35f, 0.35f, 1.0f) : glm::vec4(0.15f, 0.22f, 0.22f, 1.0f);
-            btnBorder = isClient ? glm::vec4(0.35f, 0.90f, 0.85f, 1.0f) : (hovered ? glm::vec4(0.45f, 0.80f, 0.75f, 1.0f) : glm::vec4(0.30f, 0.50f, 0.48f, 0.8f));
-            accentColor = isClient ? glm::vec4(0.35f, 0.95f, 0.85f, 1.0f) : glm::vec4(0.40f, 0.75f, 0.70f, 1.0f);
-            btnText = isClient ? "CONNECTED TO SERVER" : ("CONNECT: " + targetIP);
+            if (connState == ConnectionState::CONNECTING) {
+                btnBg = glm::vec4(0.35f, 0.30f, 0.15f, 1.0f);
+                btnBorder = glm::vec4(0.95f, 0.85f, 0.30f, 1.0f);
+                accentColor = glm::vec4(0.95f, 0.90f, 0.35f, 1.0f);
+                btnText = "CONNECTING: " + targetIP + "...";
+            } else if (connState == ConnectionState::CONNECTED && netMode == NetworkMode::CLIENT) {
+                btnBg = glm::vec4(0.15f, 0.35f, 0.25f, 1.0f);
+                btnBorder = glm::vec4(0.35f, 0.95f, 0.60f, 1.0f);
+                accentColor = glm::vec4(0.40f, 0.95f, 0.65f, 1.0f);
+                btnText = "CONNECTED: PLAYER #" + std::to_string(localId);
+            } else if (connState == ConnectionState::FAILED) {
+                btnBg = hovered ? glm::vec4(0.40f, 0.15f, 0.15f, 1.0f) : glm::vec4(0.28f, 0.12f, 0.14f, 1.0f);
+                btnBorder = glm::vec4(0.95f, 0.35f, 0.35f, 1.0f);
+                accentColor = glm::vec4(0.95f, 0.45f, 0.45f, 1.0f);
+                btnText = "FAILED! RETRY: " + targetIP;
+            } else {
+                btnBg = hovered ? glm::vec4(0.25f, 0.35f, 0.35f, 1.0f) : glm::vec4(0.15f, 0.22f, 0.22f, 1.0f);
+                btnBorder = (hovered ? glm::vec4(0.45f, 0.80f, 0.75f, 1.0f) : glm::vec4(0.30f, 0.50f, 0.48f, 0.8f));
+                accentColor = glm::vec4(0.40f, 0.75f, 0.70f, 1.0f);
+                btnText = "CONNECT: " + targetIP;
+            }
         } else {
             // Quit
             btnBg = hovered ? glm::vec4(0.38f, 0.18f, 0.20f, 1.0f) : glm::vec4(0.22f, 0.14f, 0.16f, 1.0f);

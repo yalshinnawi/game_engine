@@ -45,6 +45,7 @@ bool NetworkManager::startServer(uint16_t port) {
     disconnect();
 
     m_mode = NetworkMode::SERVER;
+    m_connState = ConnectionState::CONNECTED;
     m_localId = 1; // Server host is player ID 1
     m_running = true;
 
@@ -56,6 +57,7 @@ bool NetworkManager::connectClient(const std::string& host, uint16_t port) {
     disconnect();
 
     m_mode = NetworkMode::CLIENT;
+    m_connState = ConnectionState::CONNECTING;
     m_localId = 0; // Will be assigned by server
     m_running = true;
 
@@ -89,6 +91,7 @@ void NetworkManager::disconnect() {
     m_pendingBlockChanges.clear();
 
     m_mode = NetworkMode::OFFLINE;
+    m_connState = ConnectionState::OFFLINE;
     m_localId = 0;
 }
 
@@ -328,20 +331,38 @@ void NetworkManager::clientLoop(std::string host, uint16_t port) {
     SOCKET clientSock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     if (clientSock == INVALID_SOCKET) {
         std::cerr << "[Network] Failed to create client socket." << std::endl;
+        m_connState = ConnectionState::FAILED;
+        m_mode = NetworkMode::OFFLINE;
         m_running = false;
         return;
     }
 
+    // Set 5-second socket timeout
+#ifdef _WIN32
+    DWORD timeout = 5000;
+    setsockopt(clientSock, SOL_SOCKET, SO_RCVTIMEO, reinterpret_cast<const char*>(&timeout), sizeof(timeout));
+    setsockopt(clientSock, SOL_SOCKET, SO_SNDTIMEO, reinterpret_cast<const char*>(&timeout), sizeof(timeout));
+#endif
+
     sockaddr_in serverAddr{};
     serverAddr.sin_family = AF_INET;
     serverAddr.sin_port = htons(port);
-    inet_pton(AF_INET, host.c_str(), &serverAddr.sin_addr);
+    if (inet_pton(AF_INET, host.c_str(), &serverAddr.sin_addr) <= 0) {
+        std::cerr << "[Network] Invalid server IP address: " << host << std::endl;
+        closesocket(clientSock);
+        m_connState = ConnectionState::FAILED;
+        m_mode = NetworkMode::OFFLINE;
+        m_running = false;
+        return;
+    }
 
     std::cout << "[Network] Connecting to server at " << host << ":" << port << "..." << std::endl;
 
     if (connect(clientSock, reinterpret_cast<sockaddr*>(&serverAddr), sizeof(serverAddr)) == SOCKET_ERROR) {
-        std::cerr << "[Network] Connection to server failed." << std::endl;
+        std::cerr << "[Network] Connection to server failed! Check host IP / Firewall." << std::endl;
         closesocket(clientSock);
+        m_connState = ConnectionState::FAILED;
+        m_mode = NetworkMode::OFFLINE;
         m_running = false;
         return;
     }
@@ -349,13 +370,32 @@ void NetworkManager::clientLoop(std::string host, uint16_t port) {
     m_clientSocket = static_cast<uint64_t>(clientSock);
 
     // Wait for CONNECT_ACK
-    PacketHeader ackHeader;
+    PacketHeader ackHeader{};
     int bytes = recv(clientSock, reinterpret_cast<char*>(&ackHeader), sizeof(ackHeader), MSG_WAITALL);
     if (bytes > 0 && ackHeader.type == PacketType::CONNECT_ACK) {
-        uint32_t assignedId;
-        recv(clientSock, reinterpret_cast<char*>(&assignedId), sizeof(assignedId), MSG_WAITALL);
-        m_localId = assignedId;
-        std::cout << "[Network] Connected to server! Assigned Player ID: #" << m_localId << std::endl;
+        uint32_t assignedId = 0;
+        int idBytes = recv(clientSock, reinterpret_cast<char*>(&assignedId), sizeof(assignedId), MSG_WAITALL);
+        if (idBytes > 0) {
+            m_localId = assignedId;
+            m_connState = ConnectionState::CONNECTED;
+            std::cout << "[Network] Connected to server! Assigned Player ID: #" << m_localId << std::endl;
+        } else {
+            std::cerr << "[Network] Failed to receive assigned player ID." << std::endl;
+            m_connState = ConnectionState::FAILED;
+            m_mode = NetworkMode::OFFLINE;
+            closesocket(clientSock);
+            m_clientSocket = ~0ULL;
+            m_running = false;
+            return;
+        }
+    } else {
+        std::cerr << "[Network] Server failed to acknowledge connection." << std::endl;
+        m_connState = ConnectionState::FAILED;
+        m_mode = NetworkMode::OFFLINE;
+        closesocket(clientSock);
+        m_clientSocket = ~0ULL;
+        m_running = false;
+        return;
     }
 
     while (m_running) {
@@ -371,6 +411,8 @@ void NetworkManager::clientLoop(std::string host, uint16_t port) {
             int b = recv(clientSock, reinterpret_cast<char*>(&header), sizeof(header), MSG_WAITALL);
             if (b <= 0) {
                 std::cout << "[Network] Server disconnected." << std::endl;
+                m_connState = ConnectionState::OFFLINE;
+                m_mode = NetworkMode::OFFLINE;
                 break;
             }
 

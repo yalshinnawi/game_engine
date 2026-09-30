@@ -166,8 +166,12 @@ int main(int argc, char* argv[]) {
 
                 if (network.getMode() == voxel::NetworkMode::SERVER) {
                     title << " | [HOST: " << (network.getClientCount() + 1) << " Players]";
-                } else if (network.getMode() == voxel::NetworkMode::CLIENT) {
+                } else if (network.getConnectionState() == voxel::ConnectionState::CONNECTING) {
+                    title << " | [CONNECTING TO SERVER...]";
+                } else if (network.getConnectionState() == voxel::ConnectionState::CONNECTED) {
                     title << " | [CLIENT: Connected #" << network.getLocalId() << "]";
+                } else if (network.getConnectionState() == voxel::ConnectionState::FAILED) {
+                    title << " | [FAILED TO CONNECT]";
                 } else {
                     title << " | [OFFLINE]";
                 }
@@ -354,7 +358,8 @@ int main(int argc, char* argv[]) {
                     // In-game Pause & Multiplayer Menu
                     int hovered = -1;
                     uiRenderer.drawPauseMenu(window.getWidth(), window.getHeight(), player.isFlying(),
-                                            network.getMode(), network.getClientCount(), targetIP,
+                                            network.getMode(), network.getConnectionState(),
+                                            network.getClientCount(), network.getLocalId(), targetIP,
                                             input.getMouseX(), input.getMouseY(), hovered);
                 }
                 uiRenderer.end();

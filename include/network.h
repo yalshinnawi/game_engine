@@ -17,6 +17,13 @@ enum class NetworkMode {
     CLIENT
 };
 
+enum class ConnectionState {
+    OFFLINE,
+    CONNECTING,
+    CONNECTED,
+    FAILED
+};
+
 enum class PacketType : uint8_t {
     CONNECT_REQ = 1,
     CONNECT_ACK = 2,
@@ -72,12 +79,14 @@ public:
     void poll(std::vector<RemotePlayer>& outPlayers, std::vector<BlockEvent>& outBlockChanges);
 
     NetworkMode getMode() const { return m_mode; }
-    bool isConnected() const { return m_mode != NetworkMode::OFFLINE; }
+    ConnectionState getConnectionState() const { return m_connState; }
+    bool isConnected() const { return m_connState == ConnectionState::CONNECTED; }
     int getClientCount() const;
     uint32_t getLocalId() const { return m_localId; }
 
 private:
     NetworkMode m_mode = NetworkMode::OFFLINE;
+    std::atomic<ConnectionState> m_connState{ConnectionState::OFFLINE};
     uint32_t m_localId = 0;
     std::atomic<bool> m_running{false};
 
