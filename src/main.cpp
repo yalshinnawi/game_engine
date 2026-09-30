@@ -3,7 +3,8 @@
  * Built with C++20 and OpenGL 4.3 Core
  * 
  * Features:
- *   - Multiplayer Networking: Host server or join client in real-time
+ *   - Multiplayer Networking: Host server or join client from any IP
+ *   - Configurable server IP via server.txt or CLI argument (--join <IP>)
  *   - Synchronized Player Avatars (rendered 3D Minecraft character models)
  *   - Synchronized Block Breaking & Placing across the network
  *   - Survival Walking Mode with Gravity, Jump & Block Collisions
@@ -28,8 +29,9 @@
 
 #include <iostream>
 #include <sstream>
+#include <fstream>
 
-int main() {
+int main(int argc, char* argv[]) {
     try {
         // ── Window (1280x720, resizable) ──
         voxel::Window window(1280, 720, "VoxelEngine");
@@ -56,6 +58,46 @@ int main() {
         voxel::AvatarRenderer avatarRenderer;
         avatarRenderer.init("shaders");
 
+        // Server IP configuration
+        std::string targetIP = "127.0.0.1";
+        uint16_t targetPort = 25565;
+
+        // Read server.txt if available
+        std::ifstream configFile("server.txt");
+        if (configFile.is_open()) {
+            std::string line;
+            if (std::getline(configFile, line)) {
+                size_t first = line.find_first_not_of(" \t\r\n");
+                size_t last = line.find_last_not_of(" \t\r\n");
+                if (first != std::string::npos && last != std::string::npos) {
+                    targetIP = line.substr(first, (last - first + 1));
+                }
+            }
+        } else {
+            // Create default server.txt template
+            std::ofstream outConfig("server.txt");
+            outConfig << "127.0.0.1\n";
+        }
+
+        // Parse command line arguments
+        bool autoHost = false;
+        bool autoJoin = false;
+        for (int i = 1; i < argc; i++) {
+            std::string arg = argv[i];
+            if (arg == "--host" || arg == "-h") {
+                autoHost = true;
+            } else if ((arg == "--join" || arg == "--connect" || arg == "-c") && i + 1 < argc) {
+                targetIP = argv[++i];
+                autoJoin = true;
+            }
+        }
+
+        if (autoHost) {
+            network.startServer(targetPort);
+        } else if (autoJoin) {
+            network.connectClient(targetIP, targetPort);
+        }
+
         // Initial world pre-generation around spawn
         world.update(glm::vec3(0.0f, 50.0f, 0.0f));
 
@@ -81,7 +123,7 @@ int main() {
         std::cout << "CONTROLS:" << std::endl;
         std::cout << "  WASD: Walk | Space: Jump | Ctrl: Sprint | F: Toggle Flight" << std::endl;
         std::cout << "  Left Click: Break Block | Right Click: Place Block (1-5 to switch block)" << std::endl;
-        std::cout << "  H: Host Server (Port 25565) | J: Join Server (127.0.0.1)" << std::endl;
+        std::cout << "  H: Host Server (Port " << targetPort << ") | J: Join Server (" << targetIP << ")" << std::endl;
         std::cout << "  Escape: Open Pause Menu | F1: Wireframe | Q: Quit\n" << std::endl;
 
         // ── Main Loop ──
@@ -89,7 +131,7 @@ int main() {
             float currentFrame = static_cast<float>(glfwGetTime());
             deltaTime = currentFrame - lastFrame;
             lastFrame = currentFrame;
-            if (deltaTime > 0.1f) deltaTime = 0.1f; // Clamp delta time
+            if (deltaTime > 0.1f) deltaTime = 0.1f;
 
             // Poll GLFW events
             window.pollEvents();
@@ -150,16 +192,16 @@ int main() {
                 // Hotkey H: Host server
                 if (input.wasKeyJustPressed(GLFW_KEY_H)) {
                     if (!network.isConnected()) {
-                        network.startServer(25565);
-                        std::cout << "[Engine] Hosting server on port 25565..." << std::endl;
+                        network.startServer(targetPort);
+                        std::cout << "[Engine] Hosting server on port " << targetPort << "..." << std::endl;
                     }
                 }
 
-                // Hotkey J: Join localhost server
+                // Hotkey J: Join target server
                 if (input.wasKeyJustPressed(GLFW_KEY_J)) {
                     if (!network.isConnected()) {
-                        network.connectClient("127.0.0.1", 25565);
-                        std::cout << "[Engine] Joining server at 127.0.0.1:25565..." << std::endl;
+                        network.connectClient(targetIP, targetPort);
+                        std::cout << "[Engine] Joining server at " << targetIP << ":" << targetPort << "..." << std::endl;
                     }
                 }
 
@@ -252,12 +294,12 @@ int main() {
                 } else if (clickedBtn == 2) {
                     // Button 2: Host Server
                     if (network.getMode() != voxel::NetworkMode::SERVER) {
-                        network.startServer(25565);
+                        network.startServer(targetPort);
                     }
                 } else if (clickedBtn == 3) {
-                    // Button 3: Connect to Local Server
+                    // Button 3: Connect to Server (targetIP)
                     if (!network.isConnected()) {
-                        network.connectClient("127.0.0.1", 25565);
+                        network.connectClient(targetIP, targetPort);
                     }
                 } else if (input.wasKeyJustPressed(GLFW_KEY_Q) || clickedBtn == 4) {
                     // Button 4: Quit
